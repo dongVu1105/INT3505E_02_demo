@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Trang chủ - Hệ thống Thư viện{% endblock %}
+
+{% block content %}
+<div class="welcome-section">
+    <h1>Chào mừng đến với Hệ thống Thư viện</h1>
+    <p class="subtitle">Quản lý sách và mượn/trả sách dễ dàng</p>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>{{ total_books }}</h3>
+            <p>Tổng số đầu sách</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ available_books }}</h3>
+            <p>Sách có sẵn</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ borrowed_books }}</h3>
+            <p>Đang được mượn</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ total_borrows }}</h3>
+            <p>Tổng lượt mượn</p>
+        </div>
+    </div>
+
+    <div class="quick-actions">
+        <h2>Thao tác nhanh</h2>
+        <div class="action-buttons">
+            <a href="{{ url_for('add_book') }}" class="btn btn-primary">➕ Thêm sách mới</a>
+            <a href="{{ url_for('books') }}" class="btn btn-secondary">📖 Xem danh sách sách</a>
+            <a href="{{ url_for('borrow_records') }}" class="btn btn-info">📋 Lịch sử mượn/trả</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

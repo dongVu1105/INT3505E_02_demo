@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Quản lý sách{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📚 Danh sách sách</h1>
+    <a href="{{ url_for('add_book') }}" class="btn btn-primary">➕ Thêm sách mới</a>
+</div>
+
+<div class="table-container">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Tên sách</th>
+                <th>Tác giả</th>
+                <th>ISBN</th>
+                <th>Số lượng</th>
+                <th>Còn lại</th>
+                <th>Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if books %}
+                {% for book in books %}
+                <tr>
+                    <td>{{ book.id }}</td>
+                    <td><strong>{{ book.title }}</strong></td>
+                    <td>{{ book.author }}</td>
+                    <td>{{ book.isbn }}</td>
+                    <td>{{ book.quantity }}</td>
+                    <td>
+                        <span class="badge {% if book.available > 0 %}badge-success{% else %}badge-danger{% endif %}">
+                            {{ book.available }}
+                        </span>
+                    </td>
+                    <td class="action-buttons">
+                        <a href="{{ url_for('edit_book', book_id=book.id) }}" class="btn btn-small btn-warning">✏️ Sửa</a>
+                        <a href="{{ url_for('borrow_book', book_id=book.id) }}" 
+                           class="btn btn-small btn-success {% if book.available == 0 %}disabled{% endif %}">
+                            📤 Mượn
+                        </a>
+                        <form method="POST" action="{{ url_for('delete_book', book_id=book.id) }}" 
+                              style="display: inline;" 
+                              onsubmit="return confirm('Bạn có chắc chắn muốn xóa sách này?');">
+                            <button type="submit" class="btn btn-small btn-danger">🗑️ Xóa</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="7" class="text-center">Chưa có sách nào trong hệ thống</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Thêm sách mới{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>➕ Thêm sách mới</h1>
+    <a href="{{ url_for('books') }}" class="btn btn-secondary">← Quay lại</a>
+</div>
+
+<div class="form-container">
+    <form method="POST" action="{{ url_for('add_book') }}">
+        <div class="form-group">
+            <label for="title">Tên sách <span class="required">*</span></label>
+            <input type="text" id="title" name="title" required 
+                   placeholder="Nhập tên sách">
+        </div>
+
+        <div class="form-group">
+            <label for="author">Tác giả <span class="required">*</span></label>
+            <input type="text" id="author" name="author" required 
+                   placeholder="Nhập tên tác giả">
+        </div>
+
+        <div class="form-group">
+            <label for="isbn">ISBN <span class="required">*</span></label>
+            <input type="text" id="isbn" name="isbn" required 
+                   placeholder="Nhập mã ISBN (13 ký tự)"
+                   pattern="[0-9]{13}"
+                   title="ISBN phải có 13 chữ số">
+        </div>
+
+        <div class="form-group">
+            <label for="quantity">Số lượng <span class="required">*</span></label>
+            <input type="number" id="quantity" name="quantity" required 
+                   min="1" value="1"
+                   placeholder="Nhập số lượng sách">
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">💾 Lưu sách</button>
+            <a href="{{ url_for('books') }}" class="btn btn-secondary">❌ Hủy</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
