@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Management System - REST API Client</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">
+                📚 Library Management System
+                <span class="badge">REST Client-Server</span>
+            </h1>
+            <nav class="nav" id="mainNav" style="display: none;">
+                <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+                <button class="nav-btn" data-view="books">Books</button>
+                <button class="nav-btn" data-view="borrow-records">Borrow Records</button>
+                <button class="btn-logout" id="logoutBtn">Logout</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Alert Container -->
+            <div id="alertContainer"></div>
+
+            <!-- Login View -->
+            <div id="loginView" class="view active">
+                <div class="login-container">
+                    <div class="info-box">
+                        <h2>🎯 REST API Client-Server Architecture</h2>
+                        <p>Ứng dụng này minh họa kiến trúc <strong>Client-Server</strong> theo nguyên tắc REST:</p>
+                        <ul>
+                            <li>✅ <strong>Stateless</strong>: Server không lưu session, sử dụng JWT token</li>
+                            <li>✅ <strong>Client-Server</strong>: Tách biệt hoàn toàn UI và API</li>
+                            <li>✅ <strong>Uniform Interface</strong>: HTTP methods chuẩn (GET, POST, PUT, DELETE)</li>
+                            <li>✅ <strong>Resource-based</strong>: URL định danh resources</li>
+                            <li>✅ <strong>JSON representation</strong>: Dữ liệu trao đổi qua JSON</li>
+                        </ul>
+                    </div>
+
+                    <div class="login-box">
+                        <h2>🔐 Login</h2>
+                        <p class="text-muted">Demo: Nhập bất kỳ username/password nào</p>
+                        
+                        <form id="loginForm">
+                            <div class="form-group">
+                                <label>Username:</label>
+                                <input type="text" id="username" value="admin" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Password:</label>
+                                <input type="password" id="password" value="password123" required>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary btn-block">
+                                Login & Get JWT Token
+                            </button>
+                        </form>
+
+                        <div id="tokenDisplay" class="token-display" style="display: none;">
+                            <strong>JWT Token:</strong>
+                            <div id="tokenValue" class="token-value"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard View -->
+            <div id="dashboardView" class="view">
+                <h2>📊 Dashboard</h2>
+                
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Stats will be loaded here -->
+                </div>
+
+                <div class="quick-actions">
+                    <h3>Quick Actions</h3>
+                    <button class="btn btn-primary" onclick="switchView('books')">
+                        📚 Manage Books
+                    </button>
+                    <button class="btn btn-secondary" onclick="switchView('borrow-records')">
+                        📖 View Borrow Records
+                    </button>
+                </div>
+            </div>
+
+            <!-- Books View -->
+            <div id="booksView" class="view">
+                <div class="view-header">
+                    <h2>📚 Books Management</h2>
+                    <button class="btn btn-primary" onclick="showAddBookForm()">
+                        + Add New Book
+                    </button>
+                </div>
+
+                <!-- Add/Edit Book Form -->
+                <div id="bookFormContainer" class="form-container" style="display: none;">
+                    <h3 id="bookFormTitle">Add New Book</h3>
+                    <form id="bookForm">
+                        <input type="hidden" id="bookId">
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Title: *</label>
+                                <input type="text" id="bookTitle" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Author: *</label>
+                                <input type="text" id="bookAuthor" required>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>ISBN: *</label>
+                                <input type="text" id="bookIsbn" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Quantity: *</label>
+                                <input type="number" id="bookQuantity" min="1" required>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Save Book</button>
+                            <button type="button" class="btn btn-secondary" onclick="hideBookForm()">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Books List -->
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Title</th>
+                                <th>Author</th>
+                                <th>ISBN</th>
+                                <th>Quantity</th>
+                                <th>Available</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="booksTableBody">
+                            <!-- Books will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="booksPagination" class="pagination"></div>
+            </div>
+
+            <!-- Borrow Records View -->
+            <div id="borrowRecordsView" class="view">
+                <div class="view-header">
+                    <h2>📖 Borrow Records</h2>
+                    <button class="btn btn-primary" onclick="showBorrowBookForm()">
+                        + Borrow Book
+                    </button>
+                </div>
+
+                <!-- Borrow Book Form -->
+                <div id="borrowFormContainer" class="form-container" style="display: none;">
+                    <h3>Borrow a Book</h3>
+                    <form id="borrowForm">
+                        <div class="form-group">
+                            <label>Select Book: *</label>
+                            <select id="borrowBookId" required>
+                                <option value="">-- Select a book --</option>
+                            </select>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Borrower Name: *</label>
+                                <input type="text" id="borrowerName" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Borrower Email: *</label>
+                                <input type="email" id="borrowerEmail" required>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Borrow Book</button>
+                            <button type="button" class="btn btn-secondary" onclick="hideBorrowForm()">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Filter -->
+                <div class="filter-bar">
+                    <label>Filter by Status:</label>
+                    <select id="statusFilter" onchange="loadBorrowRecords()">
+                        <option value="">All</option>
+                        <option value="borrowed">Borrowed</option>
+                        <option value="returned">Returned</option>
+                    </select>
+                </div>
+
+                <!-- Borrow Records List -->
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Book</th>
+                                <th>Borrower</th>
+                                <th>Email</th>
+                                <th>Borrow Date</th>
+                                <th>Return Date</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="borrowRecordsTableBody">
+                            <!-- Records will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="borrowRecordsPagination" class="pagination"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Library Management System - REST API Client-Server Architecture</p>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>

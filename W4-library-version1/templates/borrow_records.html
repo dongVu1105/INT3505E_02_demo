@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Quản lý mượn/trả sách{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📋 Lịch sử mượn/trả sách</h1>
+    <a href="{{ url_for('books') }}" class="btn btn-secondary">← Quay lại</a>
+</div>
+
+<div class="filter-tabs">
+    <a href="{{ url_for('borrow_records') }}" 
+       class="tab {% if not status or status == 'all' %}active{% endif %}">
+        Tất cả
+    </a>
+    <a href="{{ url_for('borrow_records', status='borrowed') }}" 
+       class="tab {% if status == 'borrowed' %}active{% endif %}">
+        Đang mượn
+    </a>
+    <a href="{{ url_for('borrow_records', status='returned') }}" 
+       class="tab {% if status == 'returned' %}active{% endif %}">
+        Đã trả
+    </a>
+</div>
+
+<div class="table-container">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Tên sách</th>
+                <th>Người mượn</th>
+                <th>Email</th>
+                <th>Ngày mượn</th>
+                <th>Ngày trả</th>
+                <th>Trạng thái</th>
+                <th>Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if records %}
+                {% for record in records %}
+                <tr>
+                    <td>{{ record.id }}</td>
+                    <td><strong>{{ record.book.title }}</strong></td>
+                    <td>{{ record.borrower_name }}</td>
+                    <td>{{ record.borrower_email }}</td>
+                    <td>{{ record.borrow_date.strftime('%d/%m/%Y %H:%M') }}</td>
+                    <td>
+                        {% if record.return_date %}
+                            {{ record.return_date.strftime('%d/%m/%Y %H:%M') }}
+                        {% else %}
+                            <span class="text-muted">Chưa trả</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if record.status == 'borrowed' %}
+                            <span class="badge badge-warning">Đang mượn</span>
+                        {% else %}
+                            <span class="badge badge-success">Đã trả</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if record.status == 'borrowed' %}
+                            <form method="POST" action="{{ url_for('return_book', record_id=record.id) }}" 
+                                  style="display: inline;">
+                                <button type="submit" class="btn btn-small btn-success">
+                                    ✅ Xác nhận trả
+                                </button>
+                            </form>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="8" class="text-center">Chưa có bản ghi mượn/trả nào</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

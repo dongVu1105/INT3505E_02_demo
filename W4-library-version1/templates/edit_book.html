@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Chỉnh sửa sách{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>✏️ Chỉnh sửa sách</h1>
+    <a href="{{ url_for('books') }}" class="btn btn-secondary">← Quay lại</a>
+</div>
+
+<div class="form-container">
+    <form method="POST" action="{{ url_for('edit_book', book_id=book.id) }}">
+        <div class="form-group">
+            <label for="title">Tên sách <span class="required">*</span></label>
+            <input type="text" id="title" name="title" required 
+                   value="{{ book.title }}"
+                   placeholder="Nhập tên sách">
+        </div>
+
+        <div class="form-group">
+            <label for="author">Tác giả <span class="required">*</span></label>
+            <input type="text" id="author" name="author" required 
+                   value="{{ book.author }}"
+                   placeholder="Nhập tên tác giả">
+        </div>
+
+        <div class="form-group">
+            <label for="isbn">ISBN <span class="required">*</span></label>
+            <input type="text" id="isbn" name="isbn" required 
+                   value="{{ book.isbn }}"
+                   placeholder="Nhập mã ISBN (13 ký tự)"
+                   pattern="[0-9]{13}"
+                   title="ISBN phải có 13 chữ số">
+        </div>
+
+        <div class="form-group">
+            <label for="quantity">Số lượng <span class="required">*</span></label>
+            <input type="number" id="quantity" name="quantity" required 
+                   min="1" value="{{ book.quantity }}"
+                   placeholder="Nhập số lượng sách">
+            <small class="form-text">Hiện có {{ book.available }} sách còn lại</small>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">💾 Cập nhật</button>
+            <a href="{{ url_for('books') }}" class="btn btn-secondary">❌ Hủy</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

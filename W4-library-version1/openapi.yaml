@@ -1,0 +1,609 @@
+openapi: 3.0.3
+info:
+  title: Library Management API - Stateless REST Architecture
+  version: 2.0.0
+  description: |
+    API quản lý thư viện tuân thủ nguyên tắc Stateless của kiến trúc REST
+    
+    **Đặc điểm Stateless:**
+    - Không sử dụng session trên server
+    - Mỗi request độc lập và chứa đầy đủ thông tin cần thiết
+    - Sử dụng JWT token cho authentication (không lưu trữ trên server)
+    - Response không phụ thuộc vào các request trước đó
+    
+  contact:
+    name: API Support
+    email: support@library.com
+
+servers:
+  - url: http://localhost:5000/api
+    description: Development server
+
+# Security scheme definition
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token authentication (Stateless)
+        
+        Để lấy token, gửi POST request đến /api/auth/login với username và password.
+        Sau đó thêm token vào header: Authorization: Bearer <token>
+
+  schemas:
+    Book:
+      type: object
+      required:
+        - title
+        - author
+        - isbn
+        - quantity
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 1
+        title:
+          type: string
+          example: "Clean Code"
+        author:
+          type: string
+          example: "Robert C. Martin"
+        isbn:
+          type: string
+          minLength: 10
+          maxLength: 13
+          example: "9780132350884"
+        quantity:
+          type: integer
+          minimum: 1
+          example: 5
+        available:
+          type: integer
+          readOnly: true
+          example: 3
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+
+    BorrowRecord:
+      type: object
+      required:
+        - book_id
+        - borrower_name
+        - borrower_email
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        book_id:
+          type: integer
+        book_title:
+          type: string
+          readOnly: true
+        borrower_name:
+          type: string
+          example: "Nguyen Van A"
+        borrower_email:
+          type: string
+          format: email
+          example: "nguyenvana@example.com"
+        borrow_date:
+          type: string
+          format: date-time
+          readOnly: true
+        return_date:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        status:
+          type: string
+          enum: [borrowed, returned]
+          readOnly: true
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "admin"
+        password:
+          type: string
+          format: password
+          example: "password123"
+
+    LoginResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        token:
+          type: string
+          description: JWT token để sử dụng cho các request tiếp theo
+        username:
+          type: string
+
+    Statistics:
+      type: object
+      properties:
+        total_books:
+          type: integer
+        available_books:
+          type: integer
+        borrowed_books:
+          type: integer
+        total_borrows:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+    PaginatedBooks:
+      type: object
+      properties:
+        books:
+          type: array
+          items:
+            $ref: '#/components/schemas/Book'
+        total:
+          type: integer
+        page:
+          type: integer
+        pages:
+          type: integer
+        per_page:
+          type: integer
+
+    PaginatedBorrowRecords:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/BorrowRecord'
+        total:
+          type: integer
+        page:
+          type: integer
+        pages:
+          type: integer
+        per_page:
+          type: integer
+
+paths:
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Đăng nhập và nhận JWT token
+      description: |
+        **Stateless:** Token được tạo và trả về cho client. 
+        Server không lưu trữ session hay token.
+      security: []  # Không cần authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Đăng nhập thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Thiếu thông tin đăng nhập
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /books:
+    get:
+      tags:
+        - Books
+      summary: Lấy danh sách sách
+      description: |
+        **Stateless:** Query parameters chứa tất cả thông tin cần thiết.
+        Không phụ thuộc vào request trước đó.
+      security: []  # Public endpoint
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: author
+          in: query
+          schema:
+            type: string
+        - name: available_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBooks'
+
+    post:
+      tags:
+        - Books
+      summary: Thêm sách mới
+      description: |
+        **Stateless:** Request chứa đầy đủ thông tin sách.
+        Token trong header xác định user (không cần session).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Book'
+      responses:
+        '201':
+          description: Đã tạo thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  book:
+                    $ref: '#/components/schemas/Book'
+        '400':
+          description: Dữ liệu không hợp lệ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Chưa xác thực
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: ISBN đã tồn tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /books/{id}:
+    get:
+      tags:
+        - Books
+      summary: Lấy thông tin sách theo ID
+      description: |
+        **Stateless:** Response chứa đầy đủ thông tin sách.
+        Không cần thông tin từ request trước.
+      security: []  # Public endpoint
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '404':
+          description: Không tìm thấy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Books
+      summary: Cập nhật thông tin sách
+      description: |
+        **Stateless:** Request chứa tất cả thông tin cần update.
+        Không phụ thuộc vào state trước đó.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Book'
+      responses:
+        '200':
+          description: Cập nhật thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  book:
+                    $ref: '#/components/schemas/Book'
+        '400':
+          description: Dữ liệu không hợp lệ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Chưa xác thực
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Không tìm thấy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Books
+      summary: Xóa sách theo ID
+      description: |
+        **Stateless:** Chỉ cần ID trong URL và token trong header.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Đã xóa thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Chưa xác thực
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Không tìm thấy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Không thể xóa (sách đang được mượn)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /borrow-records:
+    get:
+      tags:
+        - Borrow Records
+      summary: Lấy danh sách bản ghi mượn sách
+      description: |
+        **Stateless:** Filtering qua query parameters.
+        Mỗi request độc lập.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [borrowed, returned]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBorrowRecords'
+        '401':
+          description: Chưa xác thực
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Borrow Records
+      summary: Tạo bản ghi mượn sách mới
+      description: |
+        **Stateless:** Request chứa đầy đủ thông tin cần thiết.
+        Server không lưu trạng thái giữa các request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BorrowRecord'
+      responses:
+        '201':
+          description: Đã tạo thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  record:
+                    $ref: '#/components/schemas/BorrowRecord'
+        '400':
+          description: Dữ liệu không hợp lệ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Chưa xác thực
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Sách không tồn tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Sách không còn để mượn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /borrow-records/{id}:
+    get:
+      tags:
+        - Borrow Records
+      summary: Lấy thông tin chi tiết bản ghi mượn sách
+      description: |
+        **Stateless:** Response đầy đủ thông tin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BorrowRecord'
+        '401':
+          description: Chưa xác thực
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Không tìm thấy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /borrow-records/{id}/return:
+    put:
+      tags:
+        - Borrow Records
+      summary: Trả sách
+      description: |
+        **Stateless:** Chỉ cần ID và token.
+        Server tự tính toán trạng thái mới từ database.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Trả sách thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  record:
+                    $ref: '#/components/schemas/BorrowRecord'
+        '401':
+          description: Chưa xác thực
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Không tìm thấy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Sách đã được trả rồi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /statistics:
+    get:
+      tags:
+        - Statistics
+      summary: Lấy thống kê hệ thống
+      description: |
+        **Stateless:** Tính toán real-time từ database.
+        Không lưu cache trên server.
+      security: []  # Public endpoint
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Statistics'
+
+tags:
+  - name: Authentication
+    description: Endpoints cho JWT authentication (Stateless)
+  - name: Books
+    description: Quản lý sách
+  - name: Borrow Records
+    description: Quản lý mượn/trả sách
+  - name: Statistics
+    description: Thống kê hệ thống
+
