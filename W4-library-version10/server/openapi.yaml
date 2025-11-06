@@ -1,0 +1,1152 @@
+openapi: 3.0.3
+info:
+  title: Library Management REST API
+  version: 3.0.0
+  description: |
+    REST API Server cho hệ thống quản lý thư viện với MongoDB.
+    
+    ## Đặc điểm
+    - Kiến trúc Client-Server với REST principles
+    - Stateless authentication với JWT token
+    - Hỗ trợ HTTP caching với ETag và Cache-Control
+    - CORS enabled cho phép client từ domain khác
+    - Database: MongoDB với flexible schema
+    
+    ## Nguyên tắc REST được áp dụng
+    - ✅ **Stateless**: Không session, sử dụng JWT
+    - ✅ **Client-Server**: Tách biệt hoàn toàn
+    - ✅ **Uniform Interface**: HTTP methods chuẩn
+    - ✅ **Resource-based**: URL định danh resources
+    - ✅ **Cacheable**: HTTP caching headers
+    - ✅ **JSON representation**: Dữ liệu trả về dạng JSON
+    
+    ## Authentication
+    Hầu hết các endpoint yêu cầu authentication bằng JWT token.
+    
+    **Cách sử dụng:**
+    1. Đăng nhập qua `/api/auth/login` để nhận token
+    2. Thêm token vào header: `Authorization: Bearer <token>`
+    3. Gửi request với token trong header
+    
+  contact:
+    name: Library Management API Support
+    email: support@library.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:5000
+    description: Development server
+  - url: http://127.0.0.1:5000
+    description: Local server
+
+tags:
+  - name: Authentication
+    description: Xác thực và quản lý JWT token
+  - name: Books
+    description: Quản lý sách trong thư viện
+  - name: Borrow Records
+    description: Quản lý bản ghi mượn/trả sách
+  - name: Statistics
+    description: Thống kê hệ thống
+  - name: Health
+    description: Kiểm tra trạng thái API
+
+paths:
+  /api/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Đăng nhập và nhận JWT token
+      description: |
+        Xác thực người dùng và trả về JWT token.
+        
+        **REST Principles:**
+        - Stateless: Token được tạo và trả về, server không lưu session
+        - Client-Server: Server chỉ xử lý logic, client lưu token
+        - Non-cacheable: POST request với sensitive data
+        
+        **Demo:** Hiện tại chấp nhận bất kỳ username/password nào.
+        Trong production cần implement authentication thực.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  description: Tên đăng nhập
+                  example: admin
+                password:
+                  type: string
+                  format: password
+                  description: Mật khẩu
+                  example: admin123
+            examples:
+              admin:
+                summary: Đăng nhập admin
+                value:
+                  username: admin
+                  password: admin123
+              user:
+                summary: Đăng nhập user
+                value:
+                  username: user
+                  password: password
+      responses:
+        '200':
+          description: Đăng nhập thành công
+          headers:
+            Cache-Control:
+              description: Không cache response
+              schema:
+                type: string
+                example: no-store, no-cache, must-revalidate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Login successful
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                        description: JWT token để sử dụng cho các request tiếp theo
+                        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                      username:
+                        type: string
+                        example: admin
+                      token_type:
+                        type: string
+                        example: Bearer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/auth/verify:
+    get:
+      tags:
+        - Authentication
+      summary: Kiểm tra token có hợp lệ không
+      description: |
+        Xác thực JWT token hiện tại.
+        
+        **REST Principles:**
+        - Stateless: Verify từ token, không cần tra cứu session
+        - Cacheable: Private cache 60s (chỉ browser)
+        - Vary: Cache phụ thuộc vào Authorization header
+      operationId: verifyToken
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Token hợp lệ
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: private, max-age=60
+            Vary:
+              schema:
+                type: string
+                example: Authorization
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      valid:
+                        type: boolean
+                        example: true
+                      username:
+                        type: string
+                        example: admin
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/books:
+    get:
+      tags:
+        - Books
+      summary: Lấy danh sách sách
+      description: |
+        Lấy danh sách sách với pagination và filtering.
+        
+        **REST Principles:**
+        - Stateless: Tất cả filtering qua query params
+        - Uniform Interface: HTTP GET method
+        - Self-descriptive: Response chứa metadata về pagination
+        - Cacheable: Public cache 60s, ETag enabled
+      operationId: getBooks
+      parameters:
+        - name: page
+          in: query
+          description: Số trang
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          description: Số items mỗi trang (tối đa 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: author
+          in: query
+          description: Filter theo tác giả (partial match, không phân biệt hoa thường)
+          schema:
+            type: string
+            example: Nguyen
+        - name: title
+          in: query
+          description: Filter theo tiêu đề (partial match, không phân biệt hoa thường)
+          schema:
+            type: string
+            example: Python
+        - name: isbn
+          in: query
+          description: Filter theo ISBN (exact match)
+          schema:
+            type: string
+            example: "9781234567890"
+        - name: available_only
+          in: query
+          description: Chỉ lấy sách còn available
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Thành công
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: public, max-age=60
+            ETag:
+              schema:
+                type: string
+                example: "33a64df551425fcc55e4d42a148795d9f25f89d4"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      books:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Book'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags:
+        - Books
+      summary: Tạo sách mới
+      description: |
+        Tạo một cuốn sách mới trong thư viện.
+        
+        **Yêu cầu authentication.**
+        
+        **REST Principles:**
+        - Stateless: Sử dụng JWT token, không session
+        - Uniform Interface: POST để tạo resource mới
+        - Non-cacheable: Mutation operation
+      operationId: createBook
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - author
+                - isbn
+                - quantity
+              properties:
+                title:
+                  type: string
+                  description: Tiêu đề sách
+                  example: Clean Code
+                author:
+                  type: string
+                  description: Tác giả
+                  example: Robert C. Martin
+                isbn:
+                  type: string
+                  description: Mã ISBN (phải unique)
+                  example: "9780132350884"
+                quantity:
+                  type: integer
+                  minimum: 1
+                  description: Số lượng sách
+                  example: 5
+            examples:
+              example1:
+                summary: Sách lập trình
+                value:
+                  title: Clean Code
+                  author: Robert C. Martin
+                  isbn: "9780132350884"
+                  quantity: 5
+      responses:
+        '201':
+          description: Sách được tạo thành công
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store, no-cache, must-revalidate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Book created successfully
+                  data:
+                    $ref: '#/components/schemas/Book'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/books/{book_id}:
+    get:
+      tags:
+        - Books
+      summary: Lấy thông tin chi tiết một cuốn sách
+      description: |
+        Lấy thông tin đầy đủ của một cuốn sách theo ID.
+        
+        **REST Principles:**
+        - Stateless: Response chứa đầy đủ thông tin
+        - Resource-based: URL định danh resource cụ thể
+        - Cacheable: Public cache 120s, ETag enabled
+      operationId: getBook
+      parameters:
+        - name: book_id
+          in: path
+          required: true
+          description: ID của sách (MongoDB ObjectId)
+          schema:
+            type: string
+            pattern: '^[0-9a-fA-F]{24}$'
+            example: "507f1f77bcf86cd799439011"
+      responses:
+        '200':
+          description: Thành công
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: public, max-age=120
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Book'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Books
+      summary: Cập nhật thông tin sách
+      description: |
+        Cập nhật thông tin của một cuốn sách.
+        
+        **Yêu cầu authentication.**
+        
+        **REST Principles:**
+        - Stateless: Request chứa đầy đủ thông tin cần update
+        - Idempotent: Gọi nhiều lần với cùng data cho kết quả giống nhau
+        - Non-cacheable: Mutation operation
+        
+        **Lưu ý:** Khi giảm quantity, phải đảm bảo số sách đang được mượn không vượt quá số lượng mới.
+      operationId: updateBook
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: book_id
+          in: path
+          required: true
+          description: ID của sách (MongoDB ObjectId)
+          schema:
+            type: string
+            pattern: '^[0-9a-fA-F]{24}$'
+            example: "507f1f77bcf86cd799439011"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: Tiêu đề mới
+                  example: Clean Code - Updated Edition
+                author:
+                  type: string
+                  description: Tác giả mới
+                  example: Robert C. Martin
+                isbn:
+                  type: string
+                  description: ISBN mới (phải unique nếu thay đổi)
+                  example: "9780132350884"
+                quantity:
+                  type: integer
+                  minimum: 1
+                  description: Số lượng mới (phải >= số sách đang được mượn)
+                  example: 10
+            examples:
+              update_title:
+                summary: Cập nhật tiêu đề
+                value:
+                  title: Clean Code - Updated Edition
+              update_quantity:
+                summary: Tăng số lượng
+                value:
+                  quantity: 10
+      responses:
+        '200':
+          description: Cập nhật thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Book updated successfully
+                  data:
+                    $ref: '#/components/schemas/Book'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      tags:
+        - Books
+      summary: Xóa sách
+      description: |
+        Xóa một cuốn sách khỏi thư viện.
+        
+        **Yêu cầu authentication.**
+        
+        **REST Principles:**
+        - Stateless: Chỉ cần ID và token
+        - Idempotent: Có thể gọi nhiều lần (lần 2 trở đi trả 404)
+        
+        **Lưu ý:** Không thể xóa sách đang có bản sao được mượn.
+      operationId: deleteBook
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: book_id
+          in: path
+          required: true
+          description: ID của sách cần xóa (MongoDB ObjectId)
+          schema:
+            type: string
+            pattern: '^[0-9a-fA-F]{24}$'
+            example: "507f1f77bcf86cd799439011"
+      responses:
+        '200':
+          description: Xóa thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Book deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conflict - Sách đang được mượn
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Conflict
+                  message:
+                    type: string
+                    example: Cannot delete book. 2 copies are currently borrowed
+
+  /api/borrow-records:
+    get:
+      tags:
+        - Borrow Records
+      summary: Lấy danh sách bản ghi mượn sách
+      description: |
+        Lấy danh sách các bản ghi mượn/trả sách với filtering và pagination.
+        
+        **Yêu cầu authentication.**
+        
+        **REST Principles:**
+        - Stateless: Filtering qua query parameters
+        - Cacheable: Private cache 30s (shorter due to frequent changes)
+      operationId: getBorrowRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Số trang
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          description: Số items mỗi trang (tối đa 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: status
+          in: query
+          description: Filter theo trạng thái
+          schema:
+            type: string
+            enum: [borrowed, returned]
+            example: borrowed
+        - name: borrower_name
+          in: query
+          description: Filter theo tên người mượn (partial match)
+          schema:
+            type: string
+            example: Nguyen
+      responses:
+        '200':
+          description: Thành công
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: private, max-age=30
+            Vary:
+              schema:
+                type: string
+                example: Authorization
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      records:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/BorrowRecord'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - Borrow Records
+      summary: Tạo bản ghi mượn sách mới
+      description: |
+        Tạo bản ghi mượn sách (người dùng mượn sách).
+        
+        **Yêu cầu authentication.**
+        
+        **REST Principles:**
+        - Stateless: Request chứa đầy đủ thông tin
+        - Atomic: Transaction đảm bảo consistency (giảm available count)
+        
+        **Lưu ý:** Sách phải còn available (available > 0).
+      operationId: createBorrowRecord
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - book_id
+                - borrower_name
+                - borrower_email
+              properties:
+                book_id:
+                  type: string
+                  pattern: '^[0-9a-fA-F]{24}$'
+                  description: ID của sách muốn mượn (MongoDB ObjectId)
+                  example: "507f1f77bcf86cd799439011"
+                borrower_name:
+                  type: string
+                  description: Tên người mượn
+                  example: Nguyen Van A
+                borrower_email:
+                  type: string
+                  format: email
+                  description: Email người mượn
+                  example: nguyenvana@example.com
+            examples:
+              example1:
+                summary: Mượn sách
+                value:
+                  book_id: "507f1f77bcf86cd799439011"
+                  borrower_name: Nguyen Van A
+                  borrower_email: nguyenvana@example.com
+      responses:
+        '201':
+          description: Mượn sách thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Book borrowed successfully
+                  data:
+                    $ref: '#/components/schemas/BorrowRecord'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conflict - Sách không còn available
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Conflict
+                  message:
+                    type: string
+                    example: Book is not available for borrowing
+
+  /api/borrow-records/{record_id}:
+    get:
+      tags:
+        - Borrow Records
+      summary: Lấy thông tin chi tiết một bản ghi mượn sách
+      description: |
+        Lấy thông tin đầy đủ của một bản ghi mượn sách theo ID.
+        
+        **Yêu cầu authentication.**
+        
+        **REST Principles:**
+        - Cacheable: Private cache 60s
+      operationId: getBorrowRecord
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: record_id
+          in: path
+          required: true
+          description: ID của bản ghi mượn sách (MongoDB ObjectId)
+          schema:
+            type: string
+            pattern: '^[0-9a-fA-F]{24}$'
+            example: "507f1f77bcf86cd799439011"
+      responses:
+        '200':
+          description: Thành công
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: private, max-age=60
+            Vary:
+              schema:
+                type: string
+                example: Authorization
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/BorrowRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/borrow-records/{record_id}/return:
+    put:
+      tags:
+        - Borrow Records
+      summary: Trả sách
+      description: |
+        Đánh dấu sách đã được trả lại.
+        
+        **Yêu cầu authentication.**
+        
+        **REST Principles:**
+        - Stateless: Chỉ cần record_id
+        - Idempotent: Có thể gọi nhiều lần (lần 2 trở đi trả 409)
+        - Atomic: Transaction đảm bảo consistency (tăng available count)
+      operationId: returnBook
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: record_id
+          in: path
+          required: true
+          description: ID của bản ghi mượn sách (MongoDB ObjectId)
+          schema:
+            type: string
+            pattern: '^[0-9a-fA-F]{24}$'
+            example: "507f1f77bcf86cd799439011"
+      responses:
+        '200':
+          description: Trả sách thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Book returned successfully
+                  data:
+                    $ref: '#/components/schemas/BorrowRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conflict - Sách đã được trả
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Conflict
+                  message:
+                    type: string
+                    example: Book has already been returned
+
+  /api/statistics:
+    get:
+      tags:
+        - Statistics
+      summary: Lấy thống kê hệ thống
+      description: |
+        Lấy các thống kê tổng quan về sách và bản ghi mượn/trả.
+        
+        **REST Principles:**
+        - Stateless: Tính toán real-time từ database
+        - Cacheable: Public cache 30s (thống kê thay đổi thường xuyên)
+      operationId: getStatistics
+      responses:
+        '200':
+          description: Thành công
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: public, max-age=30
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      books:
+                        type: object
+                        properties:
+                          total_titles:
+                            type: integer
+                            description: Tổng số đầu sách
+                            example: 150
+                          total_copies:
+                            type: integer
+                            description: Tổng số bản sách
+                            example: 500
+                          available_copies:
+                            type: integer
+                            description: Số bản sách còn available
+                            example: 450
+                          borrowed_copies:
+                            type: integer
+                            description: Số bản sách đang được mượn
+                            example: 50
+                      borrow_records:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                            description: Tổng số bản ghi mượn sách
+                            example: 200
+                          borrowed:
+                            type: integer
+                            description: Số sách đang được mượn
+                            example: 50
+                          returned:
+                            type: integer
+                            description: Số sách đã được trả
+                            example: 150
+
+  /api/health:
+    get:
+      tags:
+        - Health
+      summary: Kiểm tra trạng thái API
+      description: |
+        Health check endpoint để kiểm tra API có hoạt động không.
+        
+        **REST Principles:**
+        - Stateless: Không phụ thuộc session hay state
+        - Cacheable: Public cache 300s (health status ổn định)
+      operationId: healthCheck
+      responses:
+        '200':
+          description: API đang hoạt động bình thường
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: public, max-age=300
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: Library Management REST API
+                  version:
+                    type: string
+                    example: 3.0.0
+                  database:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        example: MongoDB
+                      status:
+                        type: string
+                        enum: [connected, disconnected]
+                        example: connected
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token authentication.
+        
+        **Cách lấy token:**
+        1. Gọi POST `/api/auth/login` với username và password
+        2. Lấy token từ response
+        3. Thêm vào header: `Authorization: Bearer <token>`
+        
+        **Token expiration:** 24 giờ (mặc định)
+
+  schemas:
+    Book:
+      type: object
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          description: ID của sách (MongoDB ObjectId)
+          example: "507f1f77bcf86cd799439011"
+        title:
+          type: string
+          description: Tiêu đề sách
+          example: Clean Code
+        author:
+          type: string
+          description: Tác giả
+          example: Robert C. Martin
+        isbn:
+          type: string
+          description: Mã ISBN
+          example: "9780132350884"
+        quantity:
+          type: integer
+          description: Tổng số lượng sách
+          example: 5
+        available:
+          type: integer
+          description: Số lượng sách còn available
+          example: 3
+        created_at:
+          type: string
+          format: date-time
+          description: Thời gian tạo (ISO 8601)
+          example: "2024-01-15T10:30:00"
+        updated_at:
+          type: string
+          format: date-time
+          description: Thời gian cập nhật cuối (ISO 8601)
+          example: "2024-01-20T14:25:00"
+
+    BorrowRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          description: ID của bản ghi mượn sách (MongoDB ObjectId)
+          example: "507f1f77bcf86cd799439011"
+        book_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          description: ID của sách được mượn (MongoDB ObjectId)
+          example: "507f1f77bcf86cd799439012"
+        borrower_name:
+          type: string
+          description: Tên người mượn
+          example: Nguyen Van A
+        borrower_email:
+          type: string
+          format: email
+          description: Email người mượn
+          example: nguyenvana@example.com
+        borrow_date:
+          type: string
+          format: date-time
+          description: Ngày mượn (ISO 8601)
+          example: "2024-01-15T10:30:00"
+        return_date:
+          type: string
+          format: date-time
+          nullable: true
+          description: Ngày trả (ISO 8601), null nếu chưa trả
+          example: "2024-01-25T15:45:00"
+        status:
+          type: string
+          enum: [borrowed, returned]
+          description: Trạng thái
+          example: borrowed
+        book_title:
+          type: string
+          description: Tiêu đề sách (được include từ relationship)
+          example: Clean Code
+        book_author:
+          type: string
+          description: Tác giả sách (được include từ relationship)
+          example: Robert C. Martin
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Tổng số items
+          example: 100
+        page:
+          type: integer
+          description: Trang hiện tại
+          example: 1
+        per_page:
+          type: integer
+          description: Số items mỗi trang
+          example: 10
+        pages:
+          type: integer
+          description: Tổng số trang
+          example: 10
+        has_next:
+          type: boolean
+          description: Có trang tiếp theo không
+          example: true
+        has_prev:
+          type: boolean
+          description: Có trang trước không
+          example: false
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Tên lỗi
+          example: Bad Request
+        message:
+          type: string
+          description: Mô tả chi tiết lỗi
+          example: Missing required fields
+
+  responses:
+    BadRequest:
+      description: Bad Request - Request không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missing_fields:
+              summary: Thiếu trường bắt buộc
+              value:
+                error: Bad Request
+                message: "Missing required fields: title, author"
+            invalid_data:
+              summary: Dữ liệu không hợp lệ
+              value:
+                error: Bad Request
+                message: Quantity must be a positive integer
+
+    Unauthorized:
+      description: Unauthorized - Yêu cầu authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missing_token:
+              summary: Thiếu token
+              value:
+                error: Authentication required
+                message: Token is missing in Authorization header
+            invalid_token:
+              summary: Token không hợp lệ
+              value:
+                error: Authentication failed
+                message: Token is invalid or expired
+
+    NotFound:
+      description: Not Found - Resource không tồn tại
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            book_not_found:
+              summary: Không tìm thấy sách
+              value:
+                error: Not Found
+                message: Book with id 507f1f77bcf86cd799439011 not found
+            record_not_found:
+              summary: Không tìm thấy bản ghi
+              value:
+                error: Not Found
+                message: Borrow record with id 507f1f77bcf86cd799439011 not found
+
+    Conflict:
+      description: Conflict - Xung đột dữ liệu
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            isbn_exists:
+              summary: ISBN đã tồn tại
+              value:
+                error: Conflict
+                message: A book with this ISBN already exists
+            book_not_available:
+              summary: Sách không còn available
+              value:
+                error: Conflict
+                message: Book is not available for borrowing
+            already_returned:
+              summary: Sách đã được trả
+              value:
+                error: Conflict
+                message: Book has already been returned
